@@ -41,9 +41,10 @@ public class NDSY9Entry {
     public int static_start, static_end;
     public int compressed_size;
     public int compress_flag;
-    public Extracted status = Extracted.NOT;
-    public String extFilename;
+    private Extracted status = Extracted.NOT;
+    private String extFilename;
     public byte[] data;
+    public long originalCRC;
     private boolean decompressed_data = false;
 
     public NDSY9Entry(NDSRom parent) {
@@ -58,6 +59,7 @@ public class NDSY9Entry {
             byte[] buf = new byte[this.original_size];
             rom.seek(this.offset);
             rom.readFully(buf);
+            originalCRC = FileFunctions.getCRC32(buf);
             // Compression?
             if (compress_flag != 0 && this.original_size == this.compressed_size && this.compressed_size != 0) {
                 buf = new BLZCoder(null).BLZ_DecodePub(buf, "overlay " + overlay_id);
@@ -67,8 +69,7 @@ public class NDSY9Entry {
                 // make a file
                 String tmpDir = parent.getTmpFolder();
                 String fullPath = String.format("overlay_%04d", overlay_id);
-                String tmpFilename = fullPath.replaceAll("[^A-Za-z0-9_]+", "");
-                this.extFilename = tmpFilename;
+                this.extFilename = fullPath.replaceAll("[^A-Za-z0-9_]+", "");
                 File tmpFile = new File(tmpDir + extFilename);
                 FileOutputStream fos = new FileOutputStream(tmpFile);
                 fos.write(buf);
@@ -90,8 +91,7 @@ public class NDSY9Entry {
             return newcopy;
         } else {
             String tmpDir = parent.getTmpFolder();
-            byte[] file = FileFunctions.readFileFullyIntoBuffer(tmpDir + this.extFilename);
-            return file;
+            return FileFunctions.readFileFullyIntoBuffer(tmpDir + this.extFilename);
         }
     }
 
@@ -134,7 +134,7 @@ public class NDSY9Entry {
     }
 
     private enum Extracted {
-        NOT, TO_FILE, TO_RAM;
+        NOT, TO_FILE, TO_RAM
     }
 
 }

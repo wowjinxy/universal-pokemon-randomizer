@@ -6,9 +6,10 @@ package com.dabomstew.pkrandom;
 /*--                         correct binary format so it can be loaded by   --*/
 /*--                         the current version.                           --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -27,9 +28,8 @@ package com.dabomstew.pkrandom;
 /*----------------------------------------------------------------------------*/
 
 import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.zip.CRC32;
-
-import javax.xml.bind.DatatypeConverter;
 
 public class SettingsUpdater {
 
@@ -47,7 +47,7 @@ public class SettingsUpdater {
      * @return The updated config string to be applied
      */
     public String update(int oldVersion, String configString) {
-        byte[] data = DatatypeConverter.parseBase64Binary(configString);
+        byte[] data = Base64.getDecoder().decode(configString);
         this.dataBlock = new byte[200];
         this.actualDataLength = data.length;
         System.arraycopy(data, 0, this.dataBlock, 0, this.actualDataLength);
@@ -149,14 +149,6 @@ public class SettingsUpdater {
             insertIntField(23, hasBWPatch);
         }
 
-        // 160 bug:
-        // check if all of the WPAdditionalRule bitfields are unset
-        // (None, Type Themed, Catch Em All)
-        // if they are all unset, switch "similar strength" on
-        if ((dataBlock[12] & (0x01 | 0x04 | 0x08)) == 0) {
-            dataBlock[13] |= 0x04;
-        }
-
         // 160 to 161: no change
         // the only changes were in implementation, which broke presets, but
         // leaves settings files the same
@@ -178,7 +170,7 @@ public class SettingsUpdater {
             insertExtraByte(22, (byte) 1);
 
             // Move some bits from general options to misc tweaks
-            int oldTweaks = FileFunctions.readFullInt(dataBlock, 27);
+            int oldTweaks = FileFunctions.readFullIntBigEndian(dataBlock, 27);
             if ((dataBlock[0] & 1) != 0) {
                 oldTweaks |= MiscTweak.LOWER_CASE_POKEMON_NAMES.getValue();
             }
@@ -189,9 +181,9 @@ public class SettingsUpdater {
                 oldTweaks |= MiscTweak.UPDATE_TYPE_EFFECTIVENESS.getValue();
             }
             if ((dataBlock[2] & (1 << 5)) != 0) {
-                oldTweaks |= MiscTweak.RANDOMIZE_HIDDEN_HOLLOWS.getValue();
+                oldTweaks |= MiscTweak.FORCE_CHALLENGE_MODE.getValue();
             }
-            FileFunctions.writeFullInt(dataBlock, 27, oldTweaks);
+            FileFunctions.writeFullIntBigEndian(dataBlock, 27, oldTweaks);
 
             // Now remap the affected bytes
             dataBlock[0] = getRemappedByte(dataBlock[0], new int[] { 2, 3, 4, 6, 7 });
@@ -241,6 +233,90 @@ public class SettingsUpdater {
             insertExtraByte(35, (byte) 50); // 50 in the settings file = +0% after adjustment
         }
 
+        if (oldVersion < 300) {
+            // wild level modifier
+            insertExtraByte(38, (byte) 50);
+
+            // exp curve modifier
+            insertExtraByte(39, (byte) 1);
+        }
+
+        if (oldVersion < 311) {
+            // double battle mode + boss/important extra pokemon
+            insertExtraByte(40, (byte) 0);
+
+            // regular extra pokemon + aura mod
+            insertExtraByte(41, (byte) 8);
+
+            // Totem/Ally mod + totem items/alt formes
+            insertExtraByte(42, (byte) 9);
+
+            // totem level modifier
+            insertExtraByte(43, (byte) 50);
+
+            // base stat generation
+            insertExtraByte(44, (byte) 0);
+
+            // move generation
+            insertExtraByte(45, (byte) 0);
+        }
+
+        if (oldVersion < 314) {
+            // exp curve
+            insertExtraByte(46, (byte) 0);
+
+            // static level modifier
+            insertExtraByte(47, (byte) 50);
+        }
+
+        if (oldVersion < 315) {
+            // This tweak used to be "Randomize Hidden Hollows", which got moved to static Pokemon
+            // randomization, so the misc tweak became unused in this version. It eventually *was*
+            // used in a future version for something else, but don't get confused by the new name.
+            int oldTweaks = FileFunctions.readFullIntBigEndian(dataBlock, 32);
+            oldTweaks &= ~MiscTweak.FORCE_CHALLENGE_MODE.getValue();
+            FileFunctions.writeFullIntBigEndian(dataBlock, 32, oldTweaks);
+
+            // Trainer Pokemon held items
+            insertExtraByte(48, (byte) 0);
+        }
+
+        if (oldVersion < 317) {
+            // Pickup items
+            insertExtraByte(49, (byte) 0);
+
+            // Clear "assoc" state from GenRestrictions as it doesn't exist any longer
+            int genRestrictions = FileFunctions.readFullIntBigEndian(dataBlock, 28);
+            genRestrictions &= 127;
+            FileFunctions.writeFullIntBigEndian(dataBlock, 28, genRestrictions);
+        }
+
+        if (oldVersion < 319) {
+            // 5-10 custom starters, offset by 1 because of new "Random" option
+            int starter1 = FileFunctions.read2ByteInt(dataBlock, 5);
+            int starter2 = FileFunctions.read2ByteInt(dataBlock, 7);
+            int starter3 = FileFunctions.read2ByteInt(dataBlock, 9);
+
+            starter1 += 1;
+            starter2 += 1;
+            starter3 += 1;
+
+            FileFunctions.write2ByteInt(dataBlock, 5, starter1);
+            FileFunctions.write2ByteInt(dataBlock, 7, starter2);
+            FileFunctions.write2ByteInt(dataBlock, 9, starter3);
+
+            // 50 elite four unique pokemon (3 bits)
+            insertExtraByte(50, (byte) 0);
+        }
+
+        if (oldVersion < 321) {
+            // Minimum Catch Rate got moved around to give it more space for Guaranteed Catch.
+            // Read the old one, clear it out, then write it to the new location.
+            int oldMinimumCatchRate = ((dataBlock[16] & 0x60) >> 5) + 1;
+            dataBlock[16] &= ~0x60;
+            dataBlock[50] |= ((oldMinimumCatchRate - 1) << 3);
+        }
+
         // fix checksum
         CRC32 checksum = new CRC32();
         checksum.update(dataBlock, 0, actualDataLength - 8);
@@ -252,7 +328,7 @@ public class SettingsUpdater {
         // have to make a new byte array to convert to base64
         byte[] finalConfigString = new byte[actualDataLength];
         System.arraycopy(dataBlock, 0, finalConfigString, 0, actualDataLength);
-        return DatatypeConverter.printBase64Binary(finalConfigString);
+        return Base64.getEncoder().encodeToString(finalConfigString);
     }
 
     private static byte getRemappedByte(byte old, int[] oldIndexes) {

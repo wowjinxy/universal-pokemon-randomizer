@@ -5,9 +5,10 @@ package com.dabomstew.pkrandom;
 /*--                      to allow the same seed to produce the same random --*/
 /*--                      ROM consistently.                                 --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -31,17 +32,24 @@ import java.util.Random;
 public class RandomSource {
 
     private static Random source = new Random();
+    private static Random cosmeticSource = new Random();
     private static int calls = 0;
+    private static int cosmeticCalls = 0;
     private static Random instance = new RandomSourceInstance();
+    private static Random cosmeticInstance = new CosmeticRandomSourceInstance();
 
     public static void reset() {
         source = new Random();
+        cosmeticSource = new Random();
         calls = 0;
+        cosmeticCalls = 0;
     }
 
     public static void seed(long seed) {
         source.setSeed(seed);
+        cosmeticSource.setSeed(seed);
         calls = 0;
+        cosmeticCalls = 0;
     }
 
     public static double random() {
@@ -52,6 +60,11 @@ public class RandomSource {
     public static int nextInt(int size) {
         calls++;
         return source.nextInt(size);
+    }
+
+    public static int nextIntCosmetic(int size) {
+        cosmeticCalls++;
+        return cosmeticSource.nextInt(size);
     }
 
     public static void nextBytes(byte[] bytes) {
@@ -102,8 +115,12 @@ public class RandomSource {
         return instance;
     }
 
+    public static Random cosmeticInstance() {
+        return cosmeticInstance;
+    }
+
     public static int callsSinceSeed() {
-        return calls;
+        return calls + cosmeticCalls;
     }
 
     private static class RandomSourceInstance extends Random {
@@ -158,5 +175,60 @@ public class RandomSource {
             return RandomSource.nextGaussian();
         }
 
+    }
+
+    private static class CosmeticRandomSourceInstance extends Random {
+
+        @Override
+        public synchronized void setSeed(long seed) {
+            RandomSource.seed(seed);
+        }
+
+        @Override
+        @Deprecated
+        public void nextBytes(byte[] bytes) {
+
+        }
+
+        @Override
+        @Deprecated
+        public int nextInt() {
+            return 0;
+        }
+
+        @Override
+        public int nextInt(int n) {
+            return RandomSource.nextIntCosmetic(n);
+        }
+
+        @Override
+        @Deprecated
+        public long nextLong() {
+            return 0;
+        }
+
+        @Override
+        @Deprecated
+        public boolean nextBoolean() {
+            return false;
+        }
+
+        @Override
+        @Deprecated
+        public float nextFloat() {
+            return 0;
+        }
+
+        @Override
+        @Deprecated
+        public double nextDouble() {
+            return 0;
+        }
+
+        @Override
+        @Deprecated
+        public synchronized double nextGaussian() {
+            return 0;
+        }
     }
 }

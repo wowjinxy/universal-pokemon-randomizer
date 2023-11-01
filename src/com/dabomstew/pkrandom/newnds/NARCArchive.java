@@ -1,5 +1,29 @@
 package com.dabomstew.pkrandom.newnds;
 
+/*----------------------------------------------------------------------------*/
+/*--  NARCArchive.java - class for packing/unpacking GARC archives          --*/
+/*--                                                                        --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
+/*--  Pokemon and any associated names and the like are                     --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
+/*--                                                                        --*/
+/*--  The custom code written here is licensed under the terms of the GPL:  --*/
+/*--                                                                        --*/
+/*--  This program is free software: you can redistribute it and/or modify  --*/
+/*--  it under the terms of the GNU General Public License as published by  --*/
+/*--  the Free Software Foundation, either version 3 of the License, or     --*/
+/*--  (at your option) any later version.                                   --*/
+/*--                                                                        --*/
+/*--  This program is distributed in the hope that it will be useful,       --*/
+/*--  but WITHOUT ANY WARRANTY; without even the implied warranty of        --*/
+/*--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the          --*/
+/*--  GNU General Public License for more details.                          --*/
+/*--                                                                        --*/
+/*--  You should have received a copy of the GNU General Public License     --*/
+/*--  along with this program. If not, see <http://www.gnu.org/licenses/>.  --*/
+/*----------------------------------------------------------------------------*/
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,10 +32,10 @@ import java.util.TreeMap;
 
 public class NARCArchive {
 
-    public List<String> filenames = new ArrayList<String>();
-    public List<byte[]> files = new ArrayList<byte[]>();
+    private List<String> filenames = new ArrayList<>();
+    public List<byte[]> files = new ArrayList<>();
 
-    public boolean hasFilenames = false;
+    private boolean hasFilenames = false;
 
     public NARCArchive() {
         // creates a new empty NARC with no filenames by default
@@ -155,7 +179,7 @@ public class NARCArchive {
 
         // each frame
         int offset = 0x10;
-        Map<String, byte[]> frames = new TreeMap<String, byte[]>();
+        Map<String, byte[]> frames = new TreeMap<>();
         for (int i = 0; i < frameCount; i++) {
             byte[] magic = new byte[] { data[offset + 3], data[offset + 2], data[offset + 1], data[offset] };
             String magicS = new String(magic, "US-ASCII");

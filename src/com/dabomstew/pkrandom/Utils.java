@@ -6,9 +6,10 @@ package com.dabomstew.pkrandom;
 /*--               outside of that function but should still be separated   --*/
 /*--               from GUI code.                                           --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -33,12 +34,11 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.zip.CRC32;
 
-import javax.xml.bind.DatatypeConverter;
-
 import com.dabomstew.pkrandom.exceptions.InvalidSupplementFilesException;
-import com.dabomstew.pkrandom.gui.RandomizerGUI;
+import com.dabomstew.pkrandom.newgui.NewRandomizerGUI;
 
 public class Utils {
 
@@ -76,10 +76,11 @@ public class Utils {
     // RomHandlers implicitly rely on these - call this before creating settings
     // etc.
     public static void testForRequiredConfigs() throws FileNotFoundException {
-        String[] required = new String[] { "gameboy_jap.tbl", "rby_english.tbl", "rby_freger.tbl", "rby_espita.tbl",
+        String[] required = new String[] { "gameboy_jpn.tbl", "rby_english.tbl", "rby_freger.tbl", "rby_espita.tbl",
                 "green_translation.tbl", "gsc_english.tbl", "gsc_freger.tbl", "gsc_espita.tbl", "gba_english.tbl",
-                "gba_jap.tbl", "Generation4.tbl", "Generation5.tbl", "gen1_offsets.ini", "gen2_offsets.ini",
-                "gen3_offsets.ini", "gen4_offsets.ini", "gen5_offsets.ini", SysConstants.customNamesFile };
+                "gba_jpn.tbl", "Generation4.tbl", "Generation5.tbl", "gen1_offsets.ini", "gen2_offsets.ini",
+                "gen3_offsets.ini", "gen4_offsets.ini", "gen5_offsets.ini", "gen6_offsets.ini", "gen7_offsets.ini",
+                SysConstants.customNamesFile };
         for (String filename : required) {
             if (!FileFunctions.configExists(filename)) {
                 throw new FileNotFoundException(filename);
@@ -88,8 +89,8 @@ public class Utils {
     }
 
     public static void validatePresetSupplementFiles(String config, CustomNamesSet customNames)
-            throws UnsupportedEncodingException, InvalidSupplementFilesException {
-        byte[] data = DatatypeConverter.parseBase64Binary(config);
+            throws InvalidSupplementFilesException {
+        byte[] data = Base64.getDecoder().decode(config);
 
         if (data.length < Settings.LENGTH_OF_SETTINGS_DATA + 9) {
             throw new InvalidSupplementFilesException(InvalidSupplementFilesException.Type.UNKNOWN,
@@ -115,9 +116,10 @@ public class Utils {
     }
 
     public static File getExecutionLocation() throws UnsupportedEncodingException {
-        URL location = RandomizerGUI.class.getProtectionDomain().getCodeSource().getLocation();
-        File fh = new File(java.net.URLDecoder.decode(location.getFile(), "UTF-8"));
-        return fh;
+        URL location = NewRandomizerGUI.class.getProtectionDomain().getCodeSource().getLocation();
+        String file = location.getFile();
+        String plusEncoded = file.replaceAll("\\+", "%2b");
+        return new File(java.net.URLDecoder.decode(plusEncoded, "UTF-8"));
     }
 
     public static class InvalidROMException extends Exception {

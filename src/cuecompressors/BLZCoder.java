@@ -2,14 +2,20 @@ package cuecompressors;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
 
 import com.dabomstew.pkrandom.FileFunctions;
 
 /*----------------------------------------------------------------------------*/
-/*--  blz.c - Bottom LZ coding for Nintendo GBA/DS                          --*/
-/*--  Copyright (C) 2011 CUE                                                --*/
+/*--  BLZCoder.java - Bottom LZ coding for Nintendo GBA/DS/3DS              --*/
 /*--                                                                        --*/
-/*--  Ported to Java by Dabomstew under the terms of the GPL:               --*/
+/*--  Contains code based on "pk3DS", copyright (C) Kaphotics               --*/
+/*--  Contains code based on "pokemon-x-y-icons", copyright (C) CatTrinket  --*/
+/*--  Contains code based on "blz.c", copyright (C) 2011 CUE                --*/
+/*--  Above-listed code ported to Java by Dabomstew and UPR-ZX team under   --*/
+/*--  the terms of the GPL:                                                 --*/
 /*--                                                                        --*/
 /*--  This program is free software: you can redistribute it and/or modify  --*/
 /*--  it under the terms of the GNU General Public License as published by  --*/
@@ -27,9 +33,6 @@ import com.dabomstew.pkrandom.FileFunctions;
 
 public class BLZCoder {
 
-    /**
-     * @param args
-     */
     public static void main(String[] args) {
         new BLZCoder(args);
     }
@@ -118,7 +121,7 @@ public class BLZCoder {
         System.out.print("\n");
     }
 
-    public void EXIT(String text) {
+    private void EXIT(String text) {
         System.out.print(text);
         System.exit(0);
     }
@@ -154,16 +157,19 @@ public class BLZCoder {
     }
 
     public byte[] BLZ_DecodePub(byte[] data, String reference) {
-        BLZResult result = BLZ_Decode(data);
-        if (result != null) {
-            byte[] retbuf = new byte[result.length];
-            for (int i = 0; i < result.length; i++) {
-                retbuf[i] = (byte) result.buffer[i];
-            }
-            result = null;
-            return retbuf;
+        if (reference.equals("GARC")) {
+            return LZSS_Decode(data);
         } else {
-            return null;
+            BLZResult result = BLZ_Decode(data);
+            if (result != null) {
+                byte[] retbuf = new byte[result.length];
+                for (int i = 0; i < result.length; i++) {
+                    retbuf[i] = (byte) result.buffer[i];
+                }
+                return retbuf;
+            } else {
+                return null;
+            }
         }
     }
 
@@ -178,7 +184,7 @@ public class BLZCoder {
 
         inc_len = readUnsigned(pak_buffer, pak_len - 4);
         if (inc_len < 1) {
-            System.out.printf(", WARNING: not coded file!");
+            System.out.print(", WARNING: not coded file!");
             enc_len = 0;
             dec_len = pak_len;
             pak_len = 0;
@@ -267,6 +273,103 @@ public class BLZCoder {
 
     }
 
+    // LZSS Decoding ported to Java (based on pk3DS by Kaphotics and pokemon-x-y-icons by CatTrinket)
+
+    private byte[] LZSS_Decode(byte[] data) {
+        ByteBuffer buf = ByteBuffer.wrap(data);
+        buf.order(ByteOrder.LITTLE_ENDIAN);
+        if (buf.get(0) != 0x11) {
+            System.err.println("Not a valid LZSS compressed file");
+            return null;
+        }
+        int decSize = buf.getInt() >>> 8;
+        if (decSize == 0) {
+            decSize = buf.getInt();
+        }
+
+        ByteBuffer outBuf = ByteBuffer.allocate(decSize);
+        byte flags = 0;
+        int mask = 1;
+        while (outBuf.position() < decSize) {
+            if (mask == 1) {
+                if (buf.position() >= data.length) {
+                    System.err.println("Not enough data");
+                    return null;
+                }
+                flags = buf.get();
+                mask = 0x80;
+            } else {
+                mask >>>= 1;
+            }
+
+            if ((flags & mask) > 0) {
+                if (buf.position() >= data.length) {
+                    System.err.println("Not enough data");
+                    return null;
+                }
+                byte byte1 = buf.get();
+                int length = byte1 >> 4;
+                int disp;
+                if (length == 0) {
+                    if (buf.position() + 1 >= data.length) {
+                        System.err.println("Not enough data");
+                        return null;
+                    }
+                    byte byte2 = buf.get();
+                    byte byte3 = buf.get();
+                    length = (((byte1 & 0x0F) << 4) | ((byte2 & 0xFF) >>> 4)) + 0x11;
+                    disp = (((byte2 & 0x0F) << 8) | (byte3 & 0xFF)) + 0x1;
+                } else if (length == 1) {
+                    if (buf.position() + 2 >= data.length) {
+                        System.err.println("Not enough data");
+                        return null;
+                    }
+
+                    byte byte2 = buf.get();
+                    byte byte3 = buf.get();
+                    byte byte4 = buf.get();
+
+                    length = (((byte1 & 0x0F) << 12) | ((byte2 & 0xFF) << 4) | ((byte3 & 0xFF) >>> 4)) + 0x111;
+                    disp = (((byte3 & 0x0F) << 8) | (byte4 & 0xFF)) + 0x1;
+                } else {
+                    if (buf.position() > data.length) {
+                        System.err.println("Not enough data");
+                        return null;
+                    }
+                    byte byte2 = buf.get();
+
+                    length = ((byte1 & 0xF0) >>> 4) + 0x1;
+                    disp = (((byte1 & 0x0F) << 8) | (byte2 & 0xFF)) + 0x1;
+                }
+
+                if (disp > outBuf.position()) {
+                    System.err.println("oops");
+                    return null;
+                }
+                int bufIndex = outBuf.position() - disp;
+                for (int i = 0; i < length; i++) {
+                    byte next = outBuf.get(bufIndex);
+                    bufIndex++;
+                    outBuf.put(next);
+                }
+            } else {
+                if (buf.position() > data.length) {
+                    System.err.println("Not enough data");
+                    return null;
+                }
+                byte next = buf.get();
+                outBuf.put(next);
+
+            }
+        }
+        if ((buf.position() ^ (buf.position() & 0x3)) + 4 < data.length) {
+            System.err.println("Too much input");
+            return null;
+        }
+        outBuf.flip();
+        return outBuf.array();
+    }
+
     private int[] prepareData(byte[] data) {
         int fs = data.length;
         int[] fb = new int[fs + 3];
@@ -308,20 +411,23 @@ public class BLZCoder {
     public byte[] BLZ_EncodePub(byte[] data, boolean arm9, boolean best, String reference) {
         int mode = best ? BLZ_BEST : BLZ_NORMAL;
         this.arm9 = arm9;
-        System.out.printf("- encoding '%s' (memory)", reference);
-        long startTime = System.currentTimeMillis();
-        BLZResult result = BLZ_Encode(data, mode);
-        System.out.print(" - done, time=" + (System.currentTimeMillis() - startTime) + "ms");
-        System.out.print("\n");
-        if (result != null) {
-            byte[] retbuf = new byte[result.length];
-            for (int i = 0; i < result.length; i++) {
-                retbuf[i] = (byte) result.buffer[i];
-            }
-            result = null;
-            return retbuf;
+        if (reference.equals("GARC")) {
+            return LZSS_Encode(data);
         } else {
-            return null;
+            System.out.printf("- encoding '%s' (memory)", reference);
+            long startTime = System.currentTimeMillis();
+            BLZResult result = BLZ_Encode(data, mode);
+            System.out.print(" - done, time=" + (System.currentTimeMillis() - startTime) + "ms");
+            System.out.print("\n");
+            if (result != null) {
+                byte[] retbuf = new byte[result.length];
+                for (int i = 0; i < result.length; i++) {
+                    retbuf[i] = (byte) result.buffer[i];
+                }
+                return retbuf;
+            } else {
+                return null;
+            }
         }
     }
 
@@ -464,7 +570,6 @@ public class BLZCoder {
                 tmp[raw_tmp + len] = pak_buffer[len + pak_len - pak_tmp];
             }
 
-            pak = 0;
             pak_buffer = tmp;
 
             pak = raw_tmp + pak_tmp;
@@ -487,6 +592,118 @@ public class BLZCoder {
         }
         new_len = pak;
         return pak_buffer;
+    }
+
+    // LZSS Encoding ported to Java (based on pk3DS by Kaphotics)
+
+    private byte[] LZSS_Encode(byte[] data) {
+        if (data.length > 0xFFFFFF) {
+            System.err.println("Encoding: Too much data");
+            return null;
+        }
+
+        ByteBuffer inBuf = ByteBuffer.wrap(data);
+        ByteBuffer outBuf = ByteBuffer.allocate(data.length + 8);
+        outBuf.order(ByteOrder.LITTLE_ENDIAN);
+        outBuf.put((byte)0x11);
+        outBuf.putInt(data.length);
+        outBuf.position(outBuf.position()-1); // Go back one byte since length should only be 3 bytes
+        if (data.length == 0) {
+            outBuf.putInt(0);
+            return Arrays.copyOfRange(outBuf.array(),0,outBuf.position());
+        }
+
+        ByteBuffer blockBuf = ByteBuffer.allocate((8 * 4) + 1);
+        blockBuf.put((byte)0);
+        int bufferedBlocks = 0;
+        while (inBuf.position() < data.length) {
+            if (bufferedBlocks == 8) {
+                outBuf.put(Arrays.copyOfRange(blockBuf.array(),0,blockBuf.position()));
+                blockBuf.rewind();
+                blockBuf.put((byte)0);
+                bufferedBlocks = 0;
+            }
+
+            int oldLength = Math.min(inBuf.position(),0x1000);
+            LengthDispPair pair =
+                    getOccurrenceLength(
+                            inBuf,
+                            inBuf.position(),
+                            Math.min(data.length - inBuf.position(), 0x10110),
+                            inBuf.position() - oldLength,
+                            oldLength);
+            int length = pair.length;
+            int disp = pair.disp;
+
+            if (length < 3) {
+                blockBuf.put(inBuf.get());
+            } else {
+                inBuf.position(inBuf.position() + length);
+
+                byte compFlag = (byte)(blockBuf.get(0) | (1 << (7 - bufferedBlocks)));
+                blockBuf.put(0,compFlag);
+
+                if (length > 0x110) {
+                    blockBuf.put((byte)(0x10 | (((length - 0x111) >>> 12) & 0x0F))); // Dangerous
+                    blockBuf.put((byte)(((length - 0x111) >>> 4) & 0xFF));
+                    blockBuf.put((byte)(((length - 0x111) << 4) & 0xF0));
+                    blockBuf.position(blockBuf.position()-1);
+                } else if (length > 0x10) {
+                    blockBuf.put((byte)(((length - 0x111) >>> 4) & 0x0F));
+                    blockBuf.put((byte)(((length - 0x111) << 4) & 0xF0));
+                    blockBuf.position(blockBuf.position()-1);
+                } else {
+                    blockBuf.put((byte)(((length - 1) << 4) & 0xF0));
+                    blockBuf.position(blockBuf.position()-1);
+                }
+                byte dispPart1 = (byte)(blockBuf.get(blockBuf.position()) | (byte)(((disp - 1) >>> 8) & 0x0F));
+                blockBuf.put(dispPart1);
+                blockBuf.put((byte)((disp - 1) & 0xFF));
+            }
+            bufferedBlocks++;
+        }
+        if (bufferedBlocks > 0) {
+            outBuf.put(Arrays.copyOfRange(blockBuf.array(),0,blockBuf.position()));
+        }
+        return Arrays.copyOfRange(outBuf.array(),0,outBuf.position());
+    }
+
+    private LengthDispPair getOccurrenceLength(ByteBuffer buf, int newIndex, int newLength, int oldIndex, int oldLength) {
+        int disp = 0;
+        if (newLength == 0) {
+            return new LengthDispPair(0,0);
+        }
+        int maxLength = 0;
+
+        for (int i = 0; i < oldLength - 1; i++) {
+            int currentOldStart = oldIndex + i;
+            int currentLength = 0;
+
+            for (int j = 0; j < newLength; j++) {
+                if (buf.get(currentOldStart + j) != buf.get(newIndex + j)) break;
+                currentLength++;
+            }
+
+            if (currentLength > maxLength) {
+                maxLength = currentLength;
+                disp = oldLength - i;
+
+                if (maxLength == newLength) {
+                    break;
+                }
+            }
+        }
+        return new LengthDispPair(maxLength,disp);
+    }
+
+    private class LengthDispPair {
+        int length;
+        int disp;
+
+        LengthDispPair(int length, int disp) {
+            this.length = length;
+            this.disp = disp;
+        }
     }
 
     private static class SearchPair {
