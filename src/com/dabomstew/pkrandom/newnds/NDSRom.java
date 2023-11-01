@@ -1,18 +1,16 @@
 package com.dabomstew.pkrandom.newnds;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 
 import com.dabomstew.pkrandom.SysConstants;
 import com.dabomstew.pkrandom.FileFunctions;
 import com.dabomstew.pkrandom.RomFunctions;
 
+import com.dabomstew.pkrandom.exceptions.CannotWriteToLocationException;
+import com.dabomstew.pkrandom.exceptions.RandomizerIOException;
 import cuecompressors.BLZCoder;
 
 /*----------------------------------------------------------------------------*/
@@ -39,6 +37,7 @@ import cuecompressors.BLZCoder;
 public class NDSRom {
 
     private String romCode;
+    private byte version;
     private String romFilename;
     private RandomAccessFile baseRom;
     private boolean romOpen;
@@ -51,9 +50,11 @@ public class NDSRom {
     private boolean writingEnabled;
     private boolean arm9_open, arm9_changed, arm9_has_footer;
     private boolean arm9_compressed;
-    private int arm9_szmode, arm9_szoffset;
+    private int arm9_ramoffset;
+    private int arm9_szoffset;
     private byte[] arm9_footer;
     private byte[] arm9_ramstored;
+    private long originalArm9CRC;
 
     private static final int arm9_align = 0x1FF, arm7_align = 0x1FF;
     private static final int fnt_align = 0x1FF, fat_align = 0x1FF;
@@ -106,6 +107,12 @@ public class NDSRom {
         baseRom.readFully(sig);
         this.romCode = new String(sig, "US-ASCII");
 
+        baseRom.seek(0x1E);
+        this.version = baseRom.readByte();
+
+        baseRom.seek(0x28);
+        this.arm9_ramoffset = readFromFile(baseRom, 4);
+
         baseRom.seek(0x40);
         int fntOffset = readFromFile(baseRom, 4);
         readFromFile(baseRom, 4); // fntSize not needed
@@ -117,11 +124,11 @@ public class NDSRom {
         fat = new byte[fatSize];
         baseRom.readFully(fat);
 
-        Map<Integer, String> directoryPaths = new HashMap<Integer, String>();
+        Map<Integer, String> directoryPaths = new HashMap<>();
         directoryPaths.put(0xF000, "");
         int dircount = readFromFile(baseRom, fntOffset + 0x6, 2);
-        files = new HashMap<String, NDSFile>();
-        filesByID = new HashMap<Integer, NDSFile>();
+        files = new HashMap<>();
+        filesByID = new HashMap<>();
 
         // read fnt table
         baseRom.seek(fntOffset);
@@ -136,8 +143,8 @@ public class NDSRom {
 
         // get dirnames
         String[] directoryNames = new String[dircount];
-        Map<Integer, String> filenames = new TreeMap<Integer, String>();
-        Map<Integer, Integer> fileDirectories = new HashMap<Integer, Integer>();
+        Map<Integer, String> filenames = new TreeMap<>();
+        Map<Integer, Integer> fileDirectories = new HashMap<>();
         for (int i = 0; i < dircount && i < 0x1000; i++) {
             firstPassDirectory(i, subTableOffsets[i], firstFileIDs[i], directoryNames, filenames, fileDirectories);
         }
@@ -146,13 +153,13 @@ public class NDSRom {
         for (int i = 1; i < dircount && i < 0x1000; i++) {
             String dirname = directoryNames[i];
             if (dirname != null) {
-                String fullDirName = "";
+                StringBuilder fullDirName = new StringBuilder();
                 int curDir = i;
                 while (dirname != null && !dirname.isEmpty()) {
-                    if (!fullDirName.isEmpty()) {
-                        fullDirName = "/" + fullDirName;
+                    if (fullDirName.length() > 0) {
+                        fullDirName.insert(0, "/");
                     }
-                    fullDirName = dirname + fullDirName;
+                    fullDirName.insert(0, dirname);
                     int parentDir = parentDirIDs[curDir];
                     if (parentDir >= 0xF001 && parentDir <= 0xFFFF) {
                         curDir = parentDir - 0xF000;
@@ -161,7 +168,7 @@ public class NDSRom {
                         break;
                     }
                 }
-                directoryPaths.put(i + 0xF000, fullDirName);
+                directoryPaths.put(i + 0xF000, fullDirName.toString());
             } else {
                 directoryPaths.put(i + 0xF000, "");
             }
@@ -193,7 +200,7 @@ public class NDSRom {
         int arm9_ovl_count = arm9_ovl_table_size / 32;
         byte[] y9table = new byte[arm9_ovl_table_size];
         arm9overlays = new NDSY9Entry[arm9_ovl_count];
-        arm9overlaysByFileID = new HashMap<Integer, NDSY9Entry>();
+        arm9overlaysByFileID = new HashMap<>();
         baseRom.seek(arm9_ovl_table_offset);
         baseRom.readFully(y9table);
 
@@ -223,7 +230,7 @@ public class NDSRom {
     public void saveTo(String filename) throws IOException {
         this.reopenROM();
 
-        // Initialise new ROM
+        // Initialize new ROM
         RandomAccessFile fNew = new RandomAccessFile(filename, "rw");
 
         int headersize = readFromFile(this.baseRom, 0x84, 4);
@@ -240,8 +247,8 @@ public class NDSRom {
             if (arm9_compressed) {
                 newARM9 = new BLZCoder(null).BLZ_EncodePub(newARM9, true, false, "arm9.bin");
                 if (arm9_szoffset > 0) {
-                    int newValue = arm9_szmode == 1 ? newARM9.length : newARM9.length + 0x4000;
-                    writeToByteArr(newARM9, arm9_szoffset, 3, newValue);
+                    int newValue = newARM9.length + arm9_ramoffset;
+                    writeToByteArr(newARM9, arm9_szoffset, 4, newValue);
                 }
             }
             arm9_size = newARM9.length;
@@ -267,7 +274,7 @@ public class NDSRom {
         // don't actually write arm9 ovl yet
 
         // arm7
-        int arm7_offset = ((int) (arm9_ovl_offset + arm9_ovl_size + arm7_align)) & (~arm7_align);
+        int arm7_offset = arm9_ovl_offset + arm9_ovl_size + arm7_align & (~arm7_align);
         int old_arm7_offset = readFromFile(this.baseRom, 0x30, 4);
         int arm7_size = readFromFile(this.baseRom, 0x3C, 4);
         // copy arm7
@@ -436,12 +443,15 @@ public class NDSRom {
             to.write(copybuf, 0, read);
             bytes -= read;
         }
-        copybuf = null;
     }
 
     // get rom code for opened rom
     public String getCode() {
         return this.romCode;
+    }
+
+    public byte getVersion() {
+        return this.version;
     }
 
     // returns null if file doesn't exist
@@ -478,6 +488,7 @@ public class NDSRom {
             byte[] arm9 = new byte[arm9_size];
             this.baseRom.seek(arm9_offset);
             this.baseRom.readFully(arm9);
+            originalArm9CRC = FileFunctions.getCRC32(arm9);
             // footer check
             int nitrocode = readFromFile(this.baseRom, 4);
             if (nitrocode == 0xDEC00621) {
@@ -513,21 +524,13 @@ public class NDSRom {
                 int compSize = readFromByteArr(arm9, arm9.length - 8, 3);
                 if (compSize > (arm9.length * 9 / 10) && compSize < (arm9.length * 11 / 10)) {
                     arm9_compressed = true;
-                    byte[] compLength = new byte[3];
-                    writeToByteArr(compLength, 0, 3, arm9.length);
+                    byte[] compLength = new byte[4];
+                    writeToByteArr(compLength, 0, 4, arm9.length + arm9_ramoffset);
                     List<Integer> foundOffsets = RomFunctions.search(arm9, compLength);
                     if (foundOffsets.size() == 1) {
-                        arm9_szmode = 1;
                         arm9_szoffset = foundOffsets.get(0);
                     } else {
-                        byte[] compLength2 = new byte[3];
-                        writeToByteArr(compLength2, 0, 3, arm9.length + 0x4000);
-                        List<Integer> foundOffsets2 = RomFunctions.search(arm9, compLength2);
-                        if (foundOffsets2.size() == 1) {
-                            arm9_szmode = 2;
-                            arm9_szoffset = foundOffsets2.get(0);
-                        } else {
-                        }
+                        throw new RandomizerIOException("Could not read ARM9 size offset. May be a bad ROM.");
                     }
                 }
             }
@@ -553,8 +556,7 @@ public class NDSRom {
             }
         } else {
             if (writingEnabled) {
-                byte[] file = FileFunctions.readFileFullyIntoBuffer(tmpFolder + "arm9.bin");
-                return file;
+                return FileFunctions.readFileFullyIntoBuffer(tmpFolder + "arm9.bin");
             } else {
                 byte[] newcopy = new byte[this.arm9_ramstored.length];
                 System.arraycopy(this.arm9_ramstored, 0, newcopy, 0, this.arm9_ramstored.length);
@@ -624,7 +626,31 @@ public class NDSRom {
         }
     }
 
-    // Helper methods to get variable-size ints out of files
+    public void printRomDiagnostics(PrintStream logStream) {
+        List<String> overlayList = new ArrayList<>();
+        List<String> fileList = new ArrayList<>();
+        for (Map.Entry<Integer, NDSY9Entry> entry : arm9overlaysByFileID.entrySet()) {
+            if (entry.getValue().originalCRC != 0) {
+                overlayList.add("overlay9_" + entry.getKey() + ": " + String.format("%08X", entry.getValue().originalCRC));
+            }
+        }
+        for (Map.Entry<String, NDSFile> entry : files.entrySet()) {
+            if (entry.getValue().originalCRC != 0) {
+                fileList.add(entry.getKey() + ": " + String.format("%08X", entry.getValue().originalCRC));
+            }
+        }
+        Collections.sort(overlayList);
+        Collections.sort(fileList);
+        Path p = Paths.get(this.romFilename);
+        logStream.println("File name: " + p.getFileName().toString());
+        logStream.println("arm9: " + String.format("%08X", originalArm9CRC));
+        for (String overlayLog : overlayList) {
+            logStream.println(overlayLog);
+        }
+        for (String fileLog : fileList) {
+            logStream.println(fileLog);
+        }
+    }
 
     public String getTmpFolder() {
         return tmpFolder;
@@ -638,7 +664,7 @@ public class NDSRom {
         return writingEnabled;
     }
 
-    public int readFromByteArr(byte[] data, int offset, int size) {
+    private int readFromByteArr(byte[] data, int offset, int size) {
         int result = 0;
         for (int i = 0; i < size; i++) {
             result |= (data[i + offset] & 0xFF) << (i * 8);
@@ -646,19 +672,19 @@ public class NDSRom {
         return result;
     }
 
-    public void writeToByteArr(byte[] data, int offset, int size, int value) {
+    private void writeToByteArr(byte[] data, int offset, int size, int value) {
         for (int i = 0; i < size; i++) {
             data[offset + i] = (byte) ((value >> (i * 8)) & 0xFF);
         }
     }
 
-    public int readFromFile(RandomAccessFile file, int size) throws IOException {
+    private int readFromFile(RandomAccessFile file, int size) throws IOException {
         return readFromFile(file, -1, size);
     }
 
     // use -1 offset to read from current position
     // useful if you want to read blocks
-    public int readFromFile(RandomAccessFile file, int offset, int size) throws IOException {
+    private int readFromFile(RandomAccessFile file, int offset, int size) throws IOException {
         byte[] buf = new byte[size];
         if (offset >= 0)
             file.seek(offset);
@@ -674,7 +700,7 @@ public class NDSRom {
         writeToFile(file, -1, size, value);
     }
 
-    public void writeToFile(RandomAccessFile file, int offset, int size, int value) throws IOException {
+    private void writeToFile(RandomAccessFile file, int offset, int size, int value) throws IOException {
         byte[] buf = new byte[size];
         for (int i = 0; i < size; i++) {
             buf[i] = (byte) ((value >> (i * 8)) & 0xFF);

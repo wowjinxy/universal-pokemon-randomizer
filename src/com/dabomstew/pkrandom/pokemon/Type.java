@@ -3,9 +3,10 @@ package com.dabomstew.pkrandom.pokemon;
 /*----------------------------------------------------------------------------*/
 /*--  Type.java - represents a Pokemon or move type.                        --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -32,21 +33,39 @@ import com.dabomstew.pkrandom.RomFunctions;
 
 public enum Type {
 
-    NORMAL, FIGHTING, FLYING, GRASS, WATER, FIRE, ROCK, GROUND, PSYCHIC, BUG, DRAGON, ELECTRIC, GHOST, POISON, ICE, STEEL, DARK, GAS(
-            true), FAIRY(true), WOOD(true), ABNORMAL(true), WIND(true), SOUND(true), LIGHT(true), TRI(true);
+    NORMAL, FIGHTING, FLYING, GRASS, WATER, FIRE, ROCK, GROUND, PSYCHIC, BUG, DRAGON, ELECTRIC, GHOST, POISON, ICE, STEEL, DARK, FAIRY,
+    GAS(true), WOOD(true), ABNORMAL(true), WIND(true), SOUND(true), LIGHT(true), TRI(true);
 
     public boolean isHackOnly;
 
-    private Type() {
+    Type() {
         this.isHackOnly = false;
     }
 
-    private Type(boolean isHackOnly) {
+    Type(boolean isHackOnly) {
         this.isHackOnly = isHackOnly;
     }
 
     private static final List<Type> VALUES = Collections.unmodifiableList(Arrays.asList(values()));
     private static final int SIZE = VALUES.size();
+
+    public static final List<Type> GEN1 = Collections.unmodifiableList(Arrays.asList(values()).subList(0, ICE.ordinal()+1));
+    public static final List<Type> GEN2THROUGH5 = Collections.unmodifiableList(Arrays.asList(values()).subList(0, DARK.ordinal()+1));
+    public static final List<Type> GEN6PLUS = Collections.unmodifiableList(Arrays.asList(values()).subList(0, FAIRY.ordinal()+1));
+
+    public static List<Type> getAllTypes(int generation) {
+        switch (generation) {
+            case 1:
+                return GEN1;
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+                return GEN2THROUGH5;
+            default:
+                return GEN6PLUS;
+        }
+    }
 
     public static Type randomType(Random random) {
         return VALUES.get(random.nextInt(SIZE));

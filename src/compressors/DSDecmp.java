@@ -47,7 +47,7 @@ public class DSDecmp {
         int length = (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8) | ((data[offset + 2] & 0xFF) << 16);
         offset += 3;
         if (length == 0) {
-            length = FileFunctions.readFullInt(data, offset);
+            length = FileFunctions.readFullIntBigEndian(data, offset);
             offset += 4;
         }
 
@@ -61,7 +61,6 @@ public class DSDecmp {
             for (int i = 0; i < 8; i++) {
                 flag = (flags & (0x80 >> i)) > 0;
                 if (flag) {
-                    disp = 0;
                     b = data[offset++] & 0xFF;
                     n = b >> 4;
                     disp = (b & 0x0F) << 8;
@@ -97,7 +96,7 @@ public class DSDecmp {
         int length = (data[offset] & 0xFF) | ((data[offset + 1] & 0xFF) << 8) | ((data[offset + 2] & 0xFF) << 16);
         offset += 3;
         if (length == 0) {
-            length = FileFunctions.readFullInt(data, offset);
+            length = FileFunctions.readFullIntBigEndian(data, offset);
             offset += 4;
         }
 

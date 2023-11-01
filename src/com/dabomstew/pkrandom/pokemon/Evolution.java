@@ -3,9 +3,10 @@ package com.dabomstew.pkrandom.pokemon;
 /*----------------------------------------------------------------------------*/
 /*--  Evolution.java - represents an evolution between 2 Pokemon.           --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -30,6 +31,9 @@ public class Evolution implements Comparable<Evolution> {
     public boolean carryStats;
     public EvolutionType type;
     public int extraInfo;
+    public int forme;
+    public String formeSuffix = "";
+    public int level = 0;
 
     public Evolution(Pokemon from, Pokemon to, boolean carryStats, EvolutionType type, int extra) {
         this.from = from;
@@ -58,13 +62,7 @@ public class Evolution implements Comparable<Evolution> {
         if (getClass() != obj.getClass())
             return false;
         Evolution other = (Evolution) obj;
-        if (from != other.from)
-            return false;
-        if (to != other.to)
-            return false;
-        if (type != other.type)
-            return false;
-        return true;
+        return from == other.from && to == other.to && type == other.type;
     }
 
     @Override
@@ -77,13 +75,10 @@ public class Evolution implements Comparable<Evolution> {
             return -1;
         } else if (this.to.number > o.to.number) {
             return 1;
-        } else if (this.type.ordinal() < o.type.ordinal()) {
-            return -1;
-        } else if (this.type.ordinal() > o.type.ordinal()) {
-            return 1;
-        } else {
-            return 0;
-        }
+        } else return Integer.compare(this.type.ordinal(), o.type.ordinal());
     }
 
+    public String toFullName() {
+        return to.name + formeSuffix;
+    }
 }

@@ -3,9 +3,10 @@ package com.dabomstew.pkrandom.pokemon;
 /*----------------------------------------------------------------------------*/
 /*--  EncounterSet.java - contains a group of wild Pokemon                  --*/
 /*--                                                                        --*/
-/*--  Part of "Universal Pokemon Randomizer" by Dabomstew                   --*/
+/*--  Part of "Universal Pokemon Randomizer ZX" by the UPR-ZX team          --*/
+/*--  Originally part of "Universal Pokemon Randomizer" by Dabomstew        --*/
 /*--  Pokemon and any associated names and the like are                     --*/
-/*--  trademark and (C) Nintendo 1996-2012.                                 --*/
+/*--  trademark and (C) Nintendo 1996-2020.                                 --*/
 /*--                                                                        --*/
 /*--  The custom code written here is licensed under the terms of the GPL:  --*/
 /*--                                                                        --*/
@@ -31,8 +32,8 @@ import java.util.Set;
 public class EncounterSet {
 
     public int rate;
-    public List<Encounter> encounters = new ArrayList<Encounter>();
-    public Set<Pokemon> bannedPokemon = new HashSet<Pokemon>();
+    public List<Encounter> encounters = new ArrayList<>();
+    public Set<Pokemon> bannedPokemon = new HashSet<>();
     public String displayName;
     public int offset;
 
